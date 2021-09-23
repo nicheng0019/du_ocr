@@ -1,4 +1,6 @@
 from dulines import *
+from dudocx import *
+from dupaddle import *
 
 
 def main(imgfn):
@@ -7,6 +9,8 @@ def main(imgfn):
     lines_list = cannyLines(img)
 
     lines_list = mergeLines(lines_list, img)
+
+    boxes, txts, scores = ocrProcess(img)
 
 
 

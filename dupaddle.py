@@ -1,15 +1,14 @@
 from paddleocr import PaddleOCR, draw_ocr
-from dulines import *
+from PIL import Image
 
-
-def ocr_demo():
+def ocrProcess(img):
     ocr = PaddleOCR(use_angle_cls=True, lang='ch', det_limit_side_len=1280) # need to run only once to download and load model into memory
-    img_path = r'D:\Dataset\ocr\0005.jpg'
-    result = ocr.ocr(img_path, cls=True)
+
+    result = ocr.ocr(img, cls=True)
     for line in result:
         print(line)
 
-    image = Image.open(img_path).convert('RGB')
+    image = Image.fromarray(img).convert('RGB')
     # boxes = result
     #
     # cvimg = np.array(image)
@@ -28,6 +27,8 @@ def ocr_demo():
     im_show = draw_ocr(image, boxes, txts, scores, font_path='./fonts/simfang.ttf')
     im_show = Image.fromarray(im_show)
     im_show.save(r'D:\Dataset\ocr/result.jpg')
+
+    return boxes, txts, scores
 
 
 
