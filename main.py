@@ -14,10 +14,13 @@ def main(imgfn):
     boxes, txts = ocrProcess(img)
     print(boxes)
     print(txts)
-    docx_gen(lines_list, img, boxes, txts)
+    if len(lines_list) > 0:
+        docx_gen_table(lines_list, img, boxes, txts)
+    else:
+        docx_gen_text(img, boxes, txts)
 
 
 if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
-    imgfn = r"D:\Dataset\ocr\0002.jpg"
+    imgfn = r"D:\Dataset\ocr\0003.jpg"
     main(imgfn)

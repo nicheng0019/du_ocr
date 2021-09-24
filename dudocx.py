@@ -6,8 +6,8 @@ from docx.oxml.ns import qn
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
 import docx
 
-PAPER_HEIGHT = 22.1
-PAPER_WIDTH = 15.2
+PAPER_HEIGHT = 26.9
+PAPER_WIDTH = 20.2
 
 
 def get_top_line(lines, imgh):
@@ -253,7 +253,7 @@ def get_sub_table(lines, sub_lines):
     return row_num, column_num, cell_horizontal, cell_vertical, row_ys_arr, col_xs_arr
 
 
-def docx_gen(lines, img, boxes, txts):
+def docx_gen_table(lines, img, boxes, txts):
     imgh, imgw = img.shape[:2]
 
     lines_arr = []
@@ -296,15 +296,24 @@ def docx_gen(lines, img, boxes, txts):
 
     lines.sort()
 
+    resolutionH = PAPER_HEIGHT / imgh
+    resolutionW = PAPER_WIDTH / imgw
+
     document = Document()
     document.styles["Normal"].font.name = u"宋体"
     document.styles["Normal"]._element.rPr.rFonts.set(qn("w:eastAsia"), u"宋体")
     document.styles["Normal"].font.size = Pt(10)
 
+    bfirst = True
     while True:
         topidx = get_top_line(lines, imgh)
         if -1 == topidx:
             break
+
+        if bfirst:
+            bfirst = False
+        else:
+            document.add_paragraph()
 
         rects = get_rect(lines, topidx)
         for rect in rects:
@@ -328,9 +337,6 @@ def docx_gen(lines, img, boxes, txts):
         table_column_num = column_num - 1
         table = document.add_table(rows=table_row_num, cols=table_column_num, style='Table Grid')
         table.style.paragraph_format.alignment = docx.enum.text.WD_PARAGRAPH_ALIGNMENT.CENTER
-
-        resolutionH = PAPER_HEIGHT / (row_ys_arr[-1] - row_ys_arr[0])
-        resolutionW = PAPER_WIDTH / (col_xs_arr[-1] - col_xs_arr[0])
 
         cells_pos = np.zeros((table_row_num, table_column_num, 4), dtype=np.float32)
 
@@ -397,11 +403,15 @@ def docx_gen(lines, img, boxes, txts):
 
                 text = " ".join(cell_text_dict[(row, col)])
                 table.cell(row, col).text = text
+                if len(text) > 50:
+                    table.cell(row, col).paragraphs[0].paragraph_format.line_spacing = Pt(18)
                 table.cell(row, col).vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
     document.save('d:/demo.docx')
-    quit()
 
+
+def docx_gen_text(img, boxes, txts):
+    pass
 
 if __name__ == "__main__":
     linefn, imgfn = r"D:\Dataset\ocr\0002_result.txt", r"D:\Dataset\ocr\0002.jpg"
@@ -418,14 +428,20 @@ if __name__ == "__main__":
     document.styles["Normal"]._element.rPr.rFonts.set(qn("w:eastAsia"), u"宋体")
     document.styles["Normal"].font.size = Pt(10.5)
 
+
     table.cell(0, 0).merge(table.cell(0, 1))
     table.cell(1, 0).merge(table.cell(1, 1))
     table.cell(0, 0).merge(table.cell(1, 0))
     table.cell(0, 1).merge(table.cell(1, 1))
     hdr_cells0 = table.rows[0].cells
     table.rows[0].height = Cm(3)
-    p = hdr_cells0[2].add_paragraph('一二三四五六七八九十十一十二')
+    hdr_cells0[2].text = u'一二三四五六七八九十十一十二'
+    hdr_cells0[2].paragraphs[0].paragraph_format.line_spacing = Pt(15)
+
     hdr_cells0[2].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
     hdr_cells0[3].add_paragraph('3\n')
+    document.add_paragraph()
+    table2 = document.add_table(rows=4, cols=5, style='Table Grid')
+
     document.save('d:/demo.docx')
