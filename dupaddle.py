@@ -1,34 +1,40 @@
 from paddleocr import PaddleOCR, draw_ocr
 from PIL import Image
+import cv2
+
+
+OCR_DEBUG = False
+
 
 def ocrProcess(img):
-    ocr = PaddleOCR(use_angle_cls=True, lang='ch', det_limit_side_len=1280) # need to run only once to download and load model into memory
+    global OCR_DEBUG
+    ocr = PaddleOCR(use_angle_cls=True, lang='ch', det_limit_side_len=1440,
+                    det_model_dir=r"D:\Program\Project\ncnn-master\paddle_ocr\ch_ppocr_server_v2.0_det_infer",
+                    rec_model_dir=r"D:\Program\Project\ncnn-master\paddle_ocr\ch_ppocr_server_v2.0_rec_infer") # need to run only once to download and load model into memory
 
     result = ocr.ocr(img, cls=True)
-    for line in result:
-        print(line)
-
-    image = Image.fromarray(img).convert('RGB')
-    # boxes = result
-    #
-    # cvimg = np.array(image)
-    # for box in boxes:
-    #     box = np.reshape(np.array(box), [-1, 1, 2]).astype(np.int64)
-    #     print(box)
-    #     cvimg = cv2.polylines(np.array(cvimg), [box], True, (255, 0, 0), 2)
-    #
-    # im_show = Image.fromarray(cvimg)
-    # im_show.save(r'D:\Dataset\ocr/result.jpg')
-    # quit()
 
     boxes = [line[0] for line in result]
     txts = [line[1][0] for line in result]
     scores = [line[1][1] for line in result]
-    im_show = draw_ocr(image, boxes, txts, scores, font_path='./fonts/simfang.ttf')
-    im_show = Image.fromarray(im_show)
-    im_show.save(r'D:\Dataset\ocr/result.jpg')
 
-    return boxes, txts, scores
+    if OCR_DEBUG:
+        image = Image.fromarray(img).convert('RGB')
+
+        for line in result:
+            print(line)
+
+        im_show = draw_ocr(image, boxes, txts, scores, font_path='./fonts/simfang.ttf')
+        im_show = Image.fromarray(im_show)
+        im_show.save(r'D:\Dataset\ocr/result.jpg')
+
+    return boxes, txts
 
 
-
+if __name__ == "__main__":
+    img = cv2.imread(r"D:\Dataset\ocr\0002.jpg")
+    boxes, txts = ocrProcess(img)
+    print(txts)
+    print(boxes)
+    print(len(txts))
+    print(len(boxes))

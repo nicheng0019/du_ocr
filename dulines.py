@@ -148,7 +148,7 @@ class Line(object):
         bottom_bound = h * (1 - bound_ratio)
         left_bound = w * bound_ratio
         right_bound = w * (1 - bound_ratio)
-        print(self.vertical, self.center, left_bound, right_bound, top_bound, bottom_bound)
+
         if self.vertical and (self.center[0] < left_bound or self.center[0] > right_bound):
             return True
 
@@ -210,19 +210,20 @@ def mergeLines(lines, src):
 
     lines.sort()
 
-    img2 = img.copy()
-    for line in lines:
-        # if not line.vertical:
-        #     continue
-        #print(line.p1, line.p2)
-        cv2.line(img2, tuple(line.p1.astype(np.int32)), tuple(line.p2.astype(np.int32)), (0, 255, 0), 5)
-    print("**********************")
-    cv2.namedWindow("img2", 0)
-    cv2.imshow("img2", img2)
-    cv2.waitKey(2)
+    if DEBUG:
+        img2 = img.copy()
+        for line in lines:
+            # if not line.vertical:
+            #     continue
+            #print(line.p1, line.p2)
+            cv2.line(img2, tuple(line.p1.astype(np.int32)), tuple(line.p2.astype(np.int32)), (0, 255, 0), 5)
+        print("**********************")
+        cv2.namedWindow("img2", 0)
+        cv2.imshow("img2", img2)
+        cv2.waitKey(2)
 
-    for li, line in enumerate(lines):
-        print(li, line)
+        for li, line in enumerate(lines):
+            print(li, line)
 
     for i in range(len(lines)):
         if not lines[i].valid:
@@ -247,7 +248,7 @@ def mergeLines(lines, src):
             # cv2.imshow("img3", img3)
             # cv2.waitKey(3)
 
-        print("***********", i)
+        #print("***********", i)
         # if i > 4:
         #     quit()
 
@@ -261,25 +262,19 @@ def mergeLines(lines, src):
 
         merged_lines.append(lines[i])
 
-    if len(merged_lines) > 0:
-        step = 255 // len(merged_lines)
-        for li, line in enumerate(merged_lines):
-            cv2.line(img, tuple(line.p1.astype(np.int32)), tuple(line.p2.astype(np.int32)), (0, 255 - step * li, step * li), 5)
+    if DEBUG:
+        img3 = img.copy()
 
-    cv2.namedWindow("img", 0)
-    cv2.imshow("img", img)
-    cv2.waitKey()
+        if len(merged_lines) > 0:
+            step = 255 // len(merged_lines)
+            for li, line in enumerate(merged_lines):
+                cv2.line(img3, tuple(line.p1.astype(np.int32)), tuple(line.p2.astype(np.int32)), (0, 255 - step * li, step * li), 5)
 
-    with open(textfn.replace(".txt", "_result.txt"), "w") as f:
-        for li, line in enumerate(merged_lines):
-            f.write(str(line.p1[0]) + " " + str(line.p1[1]) + " " + str(line.p2[0]) + " " + str(line.p2[1]) + "\n")
+        cv2.namedWindow("img3", 0)
+        cv2.imshow("img3", img3)
+        cv2.waitKey()
 
     return merged_lines
-
-
-linefn, imgfn, textfn = r"D:\Dataset\ocr\0002_lines.txt", r"D:\Dataset\ocr\0003.jpg", r"D:\Dataset\ocr\0002.txt"
-#mergeLines(r"D:\Dataset\ocr\0003_lines.txt", r"D:\Dataset\ocr\0003.jpg", r"D:\Dataset\ocr\0003.txt")
-#quit()
 
 
 pDll = CDLL(r"D:\Program\Project\ncnn-master\paddle_ocr\CannyLines_dll.dll")
@@ -296,7 +291,7 @@ def cannyLines(img):
 
     line_num = c_int32()
     ret = pDll.cannyLineDetect(data_p, img.shape[1], img.shape[0], lines_p, byref(line_num))
-    print(line_num, ret)
+    print("line num: ", line_num, "ret: ", ret)
 
     lines_list = []
     for i in range(line_num.value):

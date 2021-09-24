@@ -1,11 +1,14 @@
 import cv2
 from dulines import *
 from docx import Document
-from docx.shared import Inches, Cm
-
+from docx.shared import Inches, Cm, Pt
+from docx.oxml.ns import qn
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
+import docx
 
 PAPER_HEIGHT = 22.1
 PAPER_WIDTH = 15.2
+
 
 def get_top_line(lines, imgh):
     ymin = imgh
@@ -124,14 +127,6 @@ def get_all_lines_in_rect(lines, rect):
     return sub_lines
 
 
-def merge_segments(segments):
-    segnum = len(segments)
-
-    while True:
-        bchange = False
-
-
-
 def get_sub_table(lines, sub_lines):
     THRESH = 10
     topline, leftline, bottomline, rightline = lines[sub_lines[0]], \
@@ -184,7 +179,7 @@ def get_sub_table(lines, sub_lines):
     column_num += 1
     row_ys[row_num - 1].append(bottomline.center[1])
     col_xs[column_num - 1].append(rightline.center[0])
-    print(row_num, column_num)
+    print("row_num: ", row_num, "column_num: ", column_num)
 
     row_ys_arr = np.zeros(len(row_ys.keys()))
     for key in row_ys.keys():
@@ -194,7 +189,6 @@ def get_sub_table(lines, sub_lines):
     for key in col_xs.keys():
         col_xs_arr[key] = sum(col_xs[key]) / len(col_xs[key])
 
-    print(row_ys_arr, col_xs_arr)
     for li in horizontal_lines_id:
         lines[li].colstart = np.argmin(np.abs(lines[li].p1[0] - col_xs_arr))
         lines[li].colend = np.argmin(np.abs(lines[li].p2[0] - col_xs_arr))
@@ -218,13 +212,11 @@ def get_sub_table(lines, sub_lines):
     cell_horizontal = np.repeat(np.arange(column_num - 1)[np.newaxis, :], row_num - 1, axis=0)
     cell_vertical = np.repeat(np.arange(row_num - 1)[np.newaxis, :], column_num - 1, axis=0)
 
-    print(cell_horizontal)
-    print(cell_vertical)
     for i in range(1, row_num - 1):
         for j in range(1, column_num - 1):
             vertical_ids = vertical_id_dict[j]
             cols_segs = [[lines[li].rowstart,
-                        lines[li].rowend] for li in vertical_ids]
+                          lines[li].rowend] for li in vertical_ids]
 
             if len(cols_segs) == 0:
                 continue
@@ -239,14 +231,29 @@ def get_sub_table(lines, sub_lines):
             for n in range(cols_segs[-1][1], row_num - 1):
                 cell_horizontal[n, j - 1] = j
 
-            #print(cell_horizontal, i, j)
+    for i in range(1, column_num - 1):
+        for j in range(1, row_num - 1):
+            horizontal_ids = horizontal_id_dict[j]
+            rows_segs = [[lines[li].colstart,
+                          lines[li].colend] for li in horizontal_ids]
 
-    print(cell_horizontal)
-    print(cell_vertical)
-    return cell_horizontal, cell_vertical, row_ys_arr, col_xs_arr
+            if len(rows_segs) == 0:
+                continue
+
+            for n in range(0, rows_segs[0][0]):
+                cell_vertical[n, j - 1] = j
+
+            for s in range(1, len(rows_segs)):
+                for n in range(rows_segs[s - 1][1], rows_segs[s][0]):
+                    cell_vertical[n, j - 1] = j
+
+            for n in range(rows_segs[-1][1], column_num - 1):
+                cell_vertical[n, j - 1] = j
+
+    return row_num, column_num, cell_horizontal, cell_vertical, row_ys_arr, col_xs_arr
 
 
-def docx_gen(lines, img):
+def docx_gen(lines, img, boxes, txts):
     imgh, imgw = img.shape[:2]
 
     lines_arr = []
@@ -278,6 +285,9 @@ def docx_gen(lines, img):
     lines_arr = np.array(lines_arr)
     lines_arr = lines_arr.dot(M[:, :2].T) + M[:, 2]
 
+    boxes_arr = np.array(boxes, dtype=np.float32)
+    boxes_arr = boxes_arr.dot(M[:, :2].T) + M[:, 2]
+
     img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
 
     lines = []
@@ -287,28 +297,21 @@ def docx_gen(lines, img):
     lines.sort()
 
     document = Document()
+    document.styles["Normal"].font.name = u"宋体"
+    document.styles["Normal"]._element.rPr.rFonts.set(qn("w:eastAsia"), u"宋体")
+    document.styles["Normal"].font.size = Pt(10)
 
     while True:
         topidx = get_top_line(lines, imgh)
         if -1 == topidx:
             break
 
-        print(topidx, lines[topidx])
         rects = get_rect(lines, topidx)
         for rect in rects:
-            cv2.line(img, tuple(lines[rect[0]].p1.astype(np.int32)), tuple(lines[rect[0]].p2.astype(np.int32)), (0, 255, 0), 10)
-            cv2.line(img, tuple(lines[rect[1]].p1.astype(np.int32)), tuple(lines[rect[1]].p2.astype(np.int32)), (0, 255, 0), 10)
-            cv2.line(img, tuple(lines[rect[2]].p1.astype(np.int32)), tuple(lines[rect[2]].p2.astype(np.int32)), (0, 255, 0), 10)
-            cv2.line(img, tuple(lines[rect[3]].p1.astype(np.int32)), tuple(lines[rect[3]].p2.astype(np.int32)), (0, 255, 0), 10)
-
             lines[rect[0]].valid = False
             lines[rect[1]].valid = False
             lines[rect[2]].valid = False
             lines[rect[3]].valid = False
-
-        cv2.namedWindow("img", 0)
-        cv2.imshow("img", img)
-        cv2.waitKey()
 
         rect = choose_rect(lines, rects)
 
@@ -318,21 +321,30 @@ def docx_gen(lines, img):
             cv2.line(img, tuple(lines[li].p1.astype(np.int32)), tuple(lines[li].p2.astype(np.int32)),
                      (255, 0, 0), 10)
 
-        cell_horizontal, cell_vertical, row_ys_arr, col_xs_arr = get_sub_table(lines, sub_lines)
+        # cell_horizontal: table_row_num*table_column_num, cell_vertical: table_column_num*table_row_num
+        row_num, column_num, cell_horizontal, cell_vertical, row_ys_arr, col_xs_arr = get_sub_table(lines, sub_lines)
 
-        table = document.add_table(rows=cell_horizontal.shape[0], cols=cell_horizontal.shape[1], style='Table Grid')
+        table_row_num = row_num - 1
+        table_column_num = column_num - 1
+        table = document.add_table(rows=table_row_num, cols=table_column_num, style='Table Grid')
+        table.style.paragraph_format.alignment = docx.enum.text.WD_PARAGRAPH_ALIGNMENT.CENTER
 
         resolutionH = PAPER_HEIGHT / (row_ys_arr[-1] - row_ys_arr[0])
         resolutionW = PAPER_WIDTH / (col_xs_arr[-1] - col_xs_arr[0])
 
-        for row in range(cell_horizontal.shape[0]):
+        cells_pos = np.zeros((table_row_num, table_column_num, 4), dtype=np.float32)
+
+        for row in range(table_row_num):
             table.rows[row].height = Cm((row_ys_arr[row + 1] - row_ys_arr[row]) * resolutionH)
-            for col in range(cell_horizontal.shape[1]):
+            for col in range(table_column_num):
                 table.cell(row, col).width = Cm((col_xs_arr[col + 1] - col_xs_arr[col]) * resolutionW)
 
-        for row in range(cell_horizontal.shape[0]):
+                cells_pos[row, col] = np.array([col_xs_arr[col],
+                                                col_xs_arr[col + 1], row_ys_arr[row], row_ys_arr[row + 1]])
+
+        for row in range(table_row_num):
             lastcol = 0
-            for col in range(cell_horizontal.shape[1]):
+            for col in range(table_column_num):
                 if cell_horizontal[row, col] != col:
                     continue
 
@@ -341,7 +353,51 @@ def docx_gen(lines, img):
                     continue
 
                 table.cell(row, lastcol).merge(table.cell(row, col))
+                cells_pos[row, lastcol, 1] = cells_pos[row, col, 1]
                 lastcol = col + 1
+
+        for col in range(table_column_num):
+            lastrow = 0
+            for row in range(table_row_num):
+                if cell_vertical[col, row] != row:
+                    continue
+
+                if row == lastrow == cell_vertical[col, row]:
+                    lastrow = row + 1
+                    continue
+
+                table.cell(lastrow, col).merge(table.cell(row, col))
+                cells_pos[lastrow, col, 3] = cells_pos[row, col, 3]
+                lastrow = row + 1
+
+        cell_text_dict = defaultdict(list)
+        for bi, box in enumerate(boxes_arr):
+            boxleft = np.min(box[:, 0])
+            boxright = np.max(box[:, 0])
+            boxtop = np.min(box[:, 1])
+            boxbottom = np.max(box[:, 1])
+
+            bfind = False
+            for row in range(table_row_num):
+                for col in range(table_column_num):
+                    if boxleft >= cells_pos[row, col, 0] and boxright <= cells_pos[row, col, 1]\
+                            and boxtop >= cells_pos[row, col, 2] and boxbottom <= cells_pos[row, col, 3]:
+                        bfind = True
+
+                        cell_text_dict[(row, col)].append(txts[bi])
+                        break
+
+                if bfind:
+                    break
+
+        for row in range(table_row_num):
+            for col in range(table_column_num):
+                if len(cell_text_dict[(row, col)]) == 0:
+                    continue
+
+                text = " ".join(cell_text_dict[(row, col)])
+                table.cell(row, col).text = text
+                table.cell(row, col).vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
     document.save('d:/demo.docx')
     quit()
@@ -350,17 +406,26 @@ def docx_gen(lines, img):
 if __name__ == "__main__":
     linefn, imgfn = r"D:\Dataset\ocr\0002_result.txt", r"D:\Dataset\ocr\0002.jpg"
 
-    lines = read_line_file(linefn)
-    img = cv2.imread(imgfn)
-    docx_gen(lines, img)
+    # lines = read_line_file(linefn)
+    # img = cv2.imread(imgfn)
+    # docx_gen(lines, img)
 
     document = Document()
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+
     table = document.add_table(rows=4, cols=5, style='Table Grid')
-    table.cell(0, 0).merge(table.cell(2, 2))
+    document.styles["Normal"].font.name = u"宋体"
+    document.styles["Normal"]._element.rPr.rFonts.set(qn("w:eastAsia"), u"宋体")
+    document.styles["Normal"].font.size = Pt(10.5)
+
+    table.cell(0, 0).merge(table.cell(0, 1))
+    table.cell(1, 0).merge(table.cell(1, 1))
+    table.cell(0, 0).merge(table.cell(1, 0))
+    table.cell(0, 1).merge(table.cell(1, 1))
     hdr_cells0 = table.rows[0].cells
-    p = hdr_cells0[0].add_paragraph('1\n')
-    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    table.rows[0].height = Cm(3)
+    p = hdr_cells0[2].add_paragraph('一二三四五六七八九十十一十二')
+    hdr_cells0[2].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
     hdr_cells0[3].add_paragraph('3\n')
     document.save('d:/demo.docx')
