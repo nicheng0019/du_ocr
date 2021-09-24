@@ -1,1 +1,1 @@
-# du_ocr
+# loveecho_ocr
